@@ -20,7 +20,7 @@ public sealed class BankingService
 
     public void Deposit(Guid accountId, Money amount)
     {
-        var account = GetAccountOrThrow(accountId);
+        var account = GetAccount(accountId);
 
         lock (account.LockObj)
         {
@@ -30,7 +30,7 @@ public sealed class BankingService
 
     public void Withdraw(Guid accountId, Money amount)
     {
-        var account = GetAccountOrThrow(accountId);
+        var account = GetAccount(accountId);
 
         lock (account.LockObj)
         {
@@ -44,24 +44,24 @@ public sealed class BankingService
         if (fromAccountId == toAccountId)
             throw new ArgumentException("Cannot transfer to the same account.", nameof(toAccountId));
 
-        var from = GetAccountOrThrow(fromAccountId);
-        var to = GetAccountOrThrow(toAccountId);
+        var from = GetAccount(fromAccountId);
+        var to = GetAccount(toAccountId);
 
         var (first, second) = OrderLocks(fromAccountId, from, toAccountId, to);
 
         lock (first.LockObj)
-            lock (second.LockObj)
-            {
-                EnsureSufficientFunds(from, amount.Amount);
+        lock (second.LockObj)
+        {
+            EnsureSufficientFunds(from, amount.Amount);
 
-                from.Balance -= amount.Amount;
-                to.Balance += amount.Amount;
-            }
+            from.Balance -= amount.Amount;
+            to.Balance += amount.Amount;
+        }
     }
 
     public decimal GetBalance(Guid accountId)
     {
-        var account = GetAccountOrThrow(accountId);
+        var account = GetAccount(accountId);
 
         lock (account.LockObj)
         {
@@ -69,7 +69,7 @@ public sealed class BankingService
         }
     }
 
-    private AccountRecord GetAccountOrThrow(Guid accountId)
+    private AccountRecord GetAccount(Guid accountId)
     {
         if (_accounts.TryGetValue(accountId, out var account))
             return account;

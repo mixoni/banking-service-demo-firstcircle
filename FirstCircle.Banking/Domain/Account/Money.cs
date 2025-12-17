@@ -1,13 +1,18 @@
-﻿using System;
+﻿using FirstCircle.Banking.Exceptions;
 
-namespace FirstCircle.Banking;
-
-public readonly record struct Money(decimal Amount)
+public readonly struct Money
 {
+    public decimal Amount { get; }
+
+    private Money(decimal amount)
+    {
+        Amount = amount;
+    }
+
     public static Money From(decimal amount)
     {
         if (amount <= 0m)
-            throw new Exceptions.InvalidAmountException(amount);
+            throw new InvalidAmountException(amount);
 
         return new Money(amount);
     }
