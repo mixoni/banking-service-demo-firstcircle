@@ -113,4 +113,31 @@ public sealed class BankingServiceTests
         var ex = Assert.Throws<InvalidAmountException>(() => Money.From(amount));
         Assert.Equal(amount, ex.Amount);
     }
+
+    [Fact]
+    public async Task Withdraw_ConcurrentExactWithdrawals_EndBalanceIsZero_NoExceptions()
+    {
+        var svc = new BankingService();
+        var accountId = svc.CreateAccount(Money.From(1000m));
+
+        var exceptions = new System.Collections.Concurrent.ConcurrentBag<Exception>();
+
+        var tasks = Enumerable.Range(0, 1000).Select(_ => Task.Run(() =>
+        {
+            try
+            {
+                svc.Withdraw(accountId, Money.From(1m));
+            }
+            catch (Exception ex)
+            {
+                exceptions.Add(ex);
+            }
+        }));
+
+        await Task.WhenAll(tasks);
+
+        Assert.Empty(exceptions);
+        Assert.Equal(0m, svc.GetBalance(accountId));
+    }
+
 }
