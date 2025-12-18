@@ -108,7 +108,7 @@ public sealed class BankingServiceTests
     [InlineData(0)]
     [InlineData(-1)]
     [InlineData(-100)]
-    public void Money_From_WithNonPositiveAmount_Throws(decimal amount)
+    public void Money_From_WithNegativeAmount_Throws(decimal amount)
     {
         var ex = Assert.Throws<InvalidAmountException>(() => Money.From(amount));
         Assert.Equal(amount, ex.Amount);
@@ -182,5 +182,60 @@ public sealed class BankingServiceTests
         Assert.Equal(totalBefore, totalAfter);
     }
 
+    [Fact]
+    public async Task Transfer_Concurrent3AccountCircle_DoesNotDeadlock_TotalBalanceRemainsConstant()
+    {
+        var bankingService = new BankingService();
+
+        var a = bankingService.CreateAccount(Money.From(1000m));
+        var b = bankingService.CreateAccount(Money.From(1000m));
+        var c = bankingService.CreateAccount(Money.From(1000m));
+
+        var totalBefore = bankingService.GetBalance(a) + bankingService.GetBalance(b) + bankingService.GetBalance(c);
+
+        const int operations = 10_000;
+
+        var exceptions = new System.Collections.Concurrent.ConcurrentBag<Exception>();
+
+        var tasks = Enumerable.Range(0, operations).Select(i => Task.Run(() =>
+        {
+            try
+            {
+                switch (i % 3)
+                {
+                    case 0:
+                        bankingService.Transfer(a, b, Money.From(1m));
+                        break;
+                    case 1:
+                        bankingService.Transfer(b, c, Money.From(1m));
+                        break;
+                    default:
+                        bankingService.Transfer(c, a, Money.From(1m));
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                exceptions.Add(ex);
+            }
+        })).ToArray();
+
+        // deadlock detector (timeout)
+        var all = Task.WhenAll(tasks);
+        var completed = await Task.WhenAny(all, Task.Delay(TimeSpan.FromSeconds(5)));
+        
+        Assert.Same(all, completed);
+        
+        await all;
+
+        Assert.Empty(exceptions);
+
+        var totalAfter = bankingService.GetBalance(a) + bankingService.GetBalance(b) + bankingService.GetBalance(c);
+        Assert.Equal(totalBefore, totalAfter);
+
+        Assert.True(bankingService.GetBalance(a) >= 0m);
+        Assert.True(bankingService.GetBalance(b) >= 0m);
+        Assert.True(bankingService.GetBalance(c) >= 0m);
+    }
 
 }
