@@ -220,7 +220,6 @@ public sealed class BankingServiceTests
             }
         })).ToArray();
 
-        // deadlock detector (timeout)
         var all = Task.WhenAll(tasks);
         var completed = await Task.WhenAny(all, Task.Delay(TimeSpan.FromSeconds(5)));
         
@@ -236,6 +235,62 @@ public sealed class BankingServiceTests
         Assert.True(bankingService.GetBalance(a) >= 0m);
         Assert.True(bankingService.GetBalance(b) >= 0m);
         Assert.True(bankingService.GetBalance(c) >= 0m);
+    }
+
+    [Fact]
+    public async Task Transfer_ConcurrentOppositeDirections_OneFails_WithoutPartialStateChange()
+    {
+        var svc = new BankingService();
+
+        var a = svc.CreateAccount(Money.From(1000m));
+        var b = svc.CreateAccount(Money.From(10m));
+
+        using var startGate = new ManualResetEventSlim(false);
+
+        var exceptions = new System.Collections.Concurrent.ConcurrentBag<Exception>();
+
+        var t1 = Task.Run(() =>
+        {
+            startGate.Wait();
+            try
+            {
+                svc.Transfer(a, b, Money.From(100m));
+            }
+            catch (Exception ex)
+            {
+                exceptions.Add(ex);
+            }
+        });
+
+        var t2 = Task.Run(() =>
+        {
+            startGate.Wait();
+            try
+            {
+                svc.Transfer(b, a, Money.From(200m)); 
+            }
+            catch (Exception ex)
+            {
+                exceptions.Add(ex);
+            }
+        });
+
+        startGate.Set();
+
+        var all = Task.WhenAll(t1, t2);
+        var completed = await Task.WhenAny(all, Task.Delay(TimeSpan.FromSeconds(3)));
+        
+        Assert.Same(all, completed);
+        await all;
+
+        var insufficient = exceptions.OfType<InsufficientFundsException>().ToList();
+        Assert.Single(insufficient);
+
+        /* Final state:
+           - A->B (100) succeeds: A = 900, B = 110
+           - B->A (200) fails: no change */
+        Assert.Equal(900m, svc.GetBalance(a));
+        Assert.Equal(110m, svc.GetBalance(b));
     }
 
 }
