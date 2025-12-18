@@ -72,8 +72,3 @@ The following concerns are intentionally not implemented:
 
 These would be addressed at higher architectural layers in a production system.
 
----
-
-## Notes
-
-This implementation is intended to serve as a solid foundation for further discussion and extension during a follow-up pair programming session.
