@@ -1,4 +1,4 @@
-# FirstCircle.Banking
+# Service for basic banking operations
 
 This project implements a simple "in-memory banking service" that simulates basic banking operations such as account creation, deposits, withdrawals, and transfers.
 
